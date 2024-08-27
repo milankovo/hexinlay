@@ -1,0 +1,6 @@
+{
+    "plugin": {
+        "name": "HexInlay",
+        "entryPoint": "hexrays_inlay.py"
+    }
+}
