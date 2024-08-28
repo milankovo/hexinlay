@@ -5,4 +5,7 @@ Inlay hints for hex-rays decompiler
 
 
 ## Installation
-Put the folder [HexInlay](HexInlay) into your ida plugins directory.
+### Ida 9
+Put the folder [HexInlay](HexInlay) into your ida plugins folder.
+### Ida 8.4
+Put the file [hexrays_inlay.py](HexInlay/hexrays_inlay.py) into your ida plugins folder.
