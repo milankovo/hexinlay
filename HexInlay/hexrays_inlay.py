@@ -83,8 +83,14 @@ class hexinlay_hooks_t(idaapi.Hexrays_Hooks):
                         continue
                     # skip to the leftmost object
                     # otherwise we get strings like " x a1: + y" instead of "a1: x + y"
-                    while idaapi.is_binary(arg.op):
-                        arg = arg.x
+                    while 1:
+                        if  idaapi.is_binary(arg.op):
+                            arg = arg.x
+                            continue
+                        if arg.op == idaapi.cot_call:
+                            arg = arg.x
+                            continue
+                        break
 
                     #print(f"arg  {arg_idx} {arg.obj_id} {repr(arg.dstr())} should be named {argnames[arg_idx]}")
                     obj_id_name_map[arg.obj_id] = argnames[arg_idx]
