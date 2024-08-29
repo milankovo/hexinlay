@@ -87,7 +87,7 @@ class hexinlay_hooks_t(idaapi.Hexrays_Hooks):
                         if  idaapi.is_binary(arg.op):
                             arg = arg.x
                             continue
-                        if arg.op == idaapi.cot_call:
+                        if arg.op in [idaapi.cot_call, idaapi.cot_memptr, idaapi.cot_memref]:
                             arg = arg.x
                             continue
                         break
