@@ -2,7 +2,7 @@ import re
 import idaapi
 
 def modifytext(cfunc:idaapi.cfunc_t, index_to_name_map:dict):
-    rg = re.compile("\1\(([A-F0-9]{8,})")
+    rg = re.compile("\1\\(([A-F0-9]{8,})")
     ps = cfunc.get_pseudocode()
 
     used = set()
