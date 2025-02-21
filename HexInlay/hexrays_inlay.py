@@ -19,8 +19,8 @@ BUTTON YES* OK
 BUTTON CANCEL Cancel
 HexInlay settings
 {FormChangeCb}
-<#Show function argument names in decompiled code as inlay hints#enabled:{rEnabled}>
-<#Hide the inlay hint if the argument name is equal to the function's argument name#hide redundant:{rNoDuplicates}>{cGroup1}>
+<#Show function argument names in decompiled code as inlay hints#~e~nabled:{rEnabled}>
+<#Hide the inlay hint if the argument name is equal to the function's argument name#~h~ide redundant:{rNoDuplicates}>{cGroup1}>
 example:{example}
 """,
             {
