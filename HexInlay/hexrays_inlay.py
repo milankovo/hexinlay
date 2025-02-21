@@ -30,6 +30,7 @@ example:{example}
             },
         )
         self.config = config
+        self.changed = False
 
     def OnFormChange(self, fid):
         match fid:
@@ -40,8 +41,11 @@ example:{example}
             case self.rEnabled.id | self.rNoDuplicates.id:
                 self.refresh()
             case idaapi.CB_YES:
-                self.config.enabled = self.GetControlValue(self.rEnabled)
-                self.config.hide_redundant = self.GetControlValue(self.rNoDuplicates)
+                enabled = self.GetControlValue(self.rEnabled)
+                hide_redundant = self.GetControlValue(self.rNoDuplicates)
+                self.changed = (self.config.enabled != enabled) or (self.config.hide_redundant != hide_redundant)
+                self.config.enabled = enabled
+                self.config.hide_redundant = hide_redundant
         return 1
 
     def refresh(self):
@@ -76,7 +80,7 @@ example:{example}
             print(args[1:])
             ok = 0
         if ok == 1:
-            #print(f"OK {f.config.enabled=} {f.config.hide_redundant=}")
+            print(f"OK {f.config.enabled=} {f.config.hide_redundant=} {f.changed=}")
             cfg.save()
         f.Free()
 
@@ -99,7 +103,7 @@ class config_t:
         form = config_form_t(self)        
         form, args = form.Compile()
         ok = form.Execute()
-        if ok == 1:
+        if ok == 1 and form.changed:
             self.save()
             return True
         return False
@@ -269,18 +273,33 @@ class HexInlayPlugin_t(idaapi.plugin_t):
         return idaapi.PLUGIN_KEEP
     
     def enable(self, enable:bool):
-        if enable:
-            if not self.hooked:
+        match enable, self.hooked:
+            case True, False:
                 self.hook.hook()
                 self.hooked = True
-        else:
-            if self.hooked:
+                return True
+            case False, True:
                 self.hook.unhook()
                 self.hooked = False
+                return True
+            case _:
+                return False
 
     def run(self, arg=0):
-        if self.config.ask_user():
-            self.enable(self.config.enabled)
+        if not self.config.ask_user():
+            return
+        self.enable(self.config.enabled)
+        self.refresh_pseudocode_widgets()
+
+    def refresh_pseudocode_widgets(self):
+        for name in "ABCDEFGHIJKLMNOPQRSTUVWXY":
+            widget = idaapi.find_widget(f"Pseudocode-{name}")
+            if not widget:
+                continue
+            vdui: idaapi.vdui_t = idaapi.get_widget_vdui(widget)
+            if not vdui:
+                continue
+            vdui.refresh_ctext(False)
         
 
     def term(self):
