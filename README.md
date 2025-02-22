@@ -6,7 +6,7 @@ Inlay hints for hex-rays decompiler
 # Settings
 You can enable / disable inlay hints in the `Edit` -> `Plugins` -> `HexInlay` menu. You can also choose whether to hide the redundant hints.
 
-![settings](image.png)
+![settings](img/settings.png)
 
 ## Installation
 ### Ida 9+
