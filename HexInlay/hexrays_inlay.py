@@ -1,7 +1,7 @@
 import re
 import idaapi
 
- 
+
 class config_form_t(idaapi.Form):
     examples = [
         "memmove(buffer, src, 10)",
@@ -9,7 +9,7 @@ class config_form_t(idaapi.Form):
         "memmove(dst: buffer, src, len: 10)",
     ]
 
-    def __init__(self, config:"config_t"):
+    def __init__(self, config: "config_t"):
         F = idaapi.Form
 
         F.__init__(
@@ -43,7 +43,9 @@ example:{example}
             case idaapi.CB_YES:
                 enabled = self.GetControlValue(self.rEnabled)
                 hide_redundant = self.GetControlValue(self.rNoDuplicates)
-                self.changed = (self.config.enabled != enabled) or (self.config.hide_redundant != hide_redundant)
+                self.changed = (self.config.enabled != enabled) or (
+                    self.config.hide_redundant != hide_redundant
+                )
                 self.config.enabled = enabled
                 self.config.hide_redundant = hide_redundant
         return 1
@@ -53,12 +55,12 @@ example:{example}
         hide_redundant = self.GetControlValue(self.rNoDuplicates)
         self.update_window(enabled, hide_redundant)
 
-    def update_window(self, enabled:bool, hide_redundant:bool):
+    def update_window(self, enabled: bool, hide_redundant: bool):
         self.EnableField(self.rNoDuplicates, enabled)
         match enabled, hide_redundant:
             case 0, _:
                 self.SetControlValue(self.example, self.examples[0])
-                
+
             case 1, 0:
                 self.SetControlValue(self.example, self.examples[1])
 
@@ -91,80 +93,77 @@ class config_t:
         self.hide_redundant = False
 
     def load(self):
-        self.enabled = idaapi.reg_read_bool( "enabled", True, "HexInlay")
+        self.enabled = idaapi.reg_read_bool("enabled", True, "HexInlay")
         self.hide_redundant = idaapi.reg_read_bool("hide_redundant", False, "HexInlay")
-        
-    
+
     def save(self):
         idaapi.reg_write_bool("enabled", self.enabled, "HexInlay")
         idaapi.reg_write_bool("hide_redundant", self.hide_redundant, "HexInlay")
 
     def ask_user(self):
-        form = config_form_t(self)        
+        form = config_form_t(self)
         form, args = form.Compile()
         ok = form.Execute()
         if ok == 1 and form.changed:
             self.save()
             return True
         return False
-    
 
 
-def modifytext(cfunc:idaapi.cfunc_t, index_to_name_map:dict):
+def modifytext(cfunc: idaapi.cfunc_t, index_to_name_map: dict):
     rg = re.compile("\1\\(([A-F0-9]{8,})")
     ps = cfunc.get_pseudocode()
 
     used = set()
 
-    #current_line = ""
+    # current_line = ""
 
-    def callback(m): 
+    def callback(m):
         res = m.group(0)
-        num = int(m.group(1),16)
-        #print(f"Matched {repr(m.group(0))} {it} {m.group(1)}")
-
+        num = int(m.group(1), 16)
+        # print(f"Matched {repr(m.group(0))} {it} {m.group(1)}")
 
         name = index_to_name_map.get(num, None)
         if name is None:
             return res
-        
+
         if num in used:
-            #print(f"Already used {num} -  {repr(res)} in {repr(current_line)}")
+            # print(f"Already used {num} -  {repr(res)} in {repr(current_line)}")
             return res
         used.add(num)
-        
-        #print(f"Replacing {num} with {name} in {repr(res)}")
-        
+
+        # print(f"Replacing {num} with {name} in {repr(res)}")
+
         # SCOLOR_REGCMT, SCOLOR_AUTOCMT, SCOLOR_RPTCMT
         res += idaapi.COLSTR(name + ": ", idaapi.SCOLOR_AUTOCMT)
 
         return res
 
     for l in ps:
-        #print(repr(l.line))
-        #current_line = l.line
+        # print(repr(l.line))
+        # current_line = l.line
         used = set()
         l.line = rg.sub(callback, l.line)
 
-def type_to_argnames(t:idaapi.tinfo_t) -> dict:
+
+def type_to_argnames(t: idaapi.tinfo_t) -> dict:
     t.remove_ptr_or_array()
     funcdata = idaapi.func_type_data_t()
     got_data = t.get_func_details(funcdata)
     if not got_data:
-        #print(f"Failed to get function details for {t.dstr()}")
+        # print(f"Failed to get function details for {t.dstr()}")
         return
 
     argnames = {}
     for arg_idx, arg in enumerate(funcdata):
-        #print(f"arg {arg_idx} {arg.name} {arg.type.dstr()}")
+        # print(f"arg {arg_idx} {arg.name} {arg.type.dstr()}")
         argnames[arg_idx] = arg.name
 
     return argnames
 
 
 class hexinlay_hooks_t(idaapi.Hexrays_Hooks):
-
-    def __init__(self, config:config_t=None):
+    def __init__(self, config: config_t = None):
         self.config = config
         super(hexinlay_hooks_t, self).__init__()
 
@@ -174,9 +173,9 @@ class hexinlay_hooks_t(idaapi.Hexrays_Hooks):
         # should never happen as we are hooked only when the hints are enabled
         if not self.config.enabled:
             return 0
-        
-        call_item:idaapi.citem_t
-        
+
+        call_item: idaapi.citem_t
+
         obj_id_pos_map = {}
         obj_id_name_map = {}
 
@@ -185,53 +184,63 @@ class hexinlay_hooks_t(idaapi.Hexrays_Hooks):
             if call_item.op == idaapi.cot_call:
                 call_expr: idaapi.cexpr_t = call_item.cexpr
                 # 1. collect argument names from the function type
-                #print(f"Function {t.dstr()}")
-                t:idaapi.tinfo_t = call_expr.x.type
+                # print(f"Function {t.dstr()}")
+                t: idaapi.tinfo_t = call_expr.x.type
                 argnames = type_to_argnames(t)
                 if not argnames:
-                    print(f"Failed to get function details for {t.dstr()} at {call_expr.ea:x}")
+                    print(
+                        f"Failed to get function details for {t.dstr()} at {call_expr.ea:x}"
+                    )
                     continue
                 # 2. collect argument objects from the call expression
-                arglist:idaapi.carglist_t = call_expr.a
+                arglist: idaapi.carglist_t = call_expr.a
                 arg: idaapi.carg_t
 
                 for arg_idx, arg in enumerate(arglist):
                     argname = argnames.get(arg_idx, None)
                     if not argname:
                         continue
-                    
+
                     if self.config.hide_redundant:
                         # if the argument name is the same as the function argument name, skip it
-                        if arg.op in [idaapi.cot_obj, idaapi.cot_var] and argname == arg.dstr():
-                            #print(f"Skipping {arg_idx} {argname} {arg.dstr()} {idaapi.get_ctype_name(arg.op)=} ")
+                        if (
+                            arg.op in [idaapi.cot_obj, idaapi.cot_var]
+                            and argname == arg.dstr()
+                        ):
+                            # print(f"Skipping {arg_idx} {argname} {arg.dstr()} {idaapi.get_ctype_name(arg.op)=} ")
                             continue
 
                     # skip to the leftmost object
                     # otherwise we get strings like " x a1: + y" instead of "a1: x + y"
                     while 1:
-                        if  idaapi.is_binary(arg.op):
+                        if idaapi.is_binary(arg.op):
                             arg = arg.x
                             continue
-                        if arg.op in [idaapi.cot_call, idaapi.cot_memptr, idaapi.cot_memref]:
+                        if arg.op in [
+                            idaapi.cot_call,
+                            idaapi.cot_memptr,
+                            idaapi.cot_memref,
+                        ]:
                             arg = arg.x
                             continue
                         break
 
-                    #print(f"arg  {arg_idx} {arg.obj_id} {repr(arg.dstr())} should be named {argnames[arg_idx]}")
+                    # print(f"arg  {arg_idx} {arg.obj_id} {repr(arg.dstr())} should be named {argnames[arg_idx]}")
                     obj_id_name_map[arg.obj_id] = argname
 
         index_to_name_map = {}
         for obj_id, name in obj_id_name_map.items():
             index = obj_id_pos_map[obj_id]
             index_to_name_map[index] = name
-            #print(f"Mapping {index} to {repr(name)}")
+            # print(f"Mapping {index} to {repr(name)}")
 
         modifytext(cfunc, index_to_name_map)
         return 0
 
+
 if __name__ == "__main__":
     idaapi.msg_clear()
-    if 'hex_cb_info' in globals():
+    if "hex_cb_info" in globals():
         print(f"Unhooking {hex_cb_info}")
         hex_cb_info.unhook()
 
@@ -257,10 +266,8 @@ class HexInlayPlugin_t(idaapi.plugin_t):
         self.config = config_t()
         self.config.load()
 
-
         self.hook = hexinlay_hooks_t(self.config)
         self.enable(self.config.enabled)
-
 
         addon = idaapi.addon_info_t()
         addon.id = "milan.bohacek.hexinlay"
@@ -271,8 +278,8 @@ class HexInlayPlugin_t(idaapi.plugin_t):
         idaapi.register_addon(addon)
 
         return idaapi.PLUGIN_KEEP
-    
-    def enable(self, enable:bool):
+
+    def enable(self, enable: bool):
         match enable, self.hooked:
             case True, False:
                 self.hook.hook()
@@ -300,7 +307,6 @@ class HexInlayPlugin_t(idaapi.plugin_t):
             if not vdui:
                 continue
             vdui.refresh_ctext(False)
-        
 
     def term(self):
         if self.hooked:
