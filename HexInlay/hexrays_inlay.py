@@ -1,15 +1,24 @@
 import re
 import idaapi
+import enum
 
+
+class plugin_state(enum.IntEnum):
+    disabled = 0
+    show_all = 1
+    hide_some = 2
+    hide_more = 3
+
+
+plugin_state_examples = {
+    plugin_state.disabled: "memmove(this->dst, src, 10)",
+    plugin_state.show_all: "memmove(dst: this->dst, src: src, len: 10)",
+    plugin_state.hide_some: "memmove(dst: this->dst, src, len: 10)",
+    plugin_state.hide_more: "memmove(this->dst, src, len: 10)",
+}
 
 class config_form_t(idaapi.Form):
-    examples = [
-        "memmove(buffer, src, 10)",
-        "memmove(dst: buffer, src: src, len: 10)",
-        "memmove(dst: buffer, src, len: 10)",
-    ]
-
-    def __init__(self, config: "config_t"):
+    def __init__(self, state: plugin_state):
         F = idaapi.Form
 
         F.__init__(
@@ -19,59 +28,43 @@ BUTTON YES* OK
 BUTTON CANCEL Cancel
 HexInlay settings
 {FormChangeCb}
-<#Show function argument names in decompiled code as inlay hints#~e~nabled:{rEnabled}>
-<#Hide the inlay hint if the argument name is equal to the function's argument name#~h~ide redundant:{rNoDuplicates}>{cGroup1}>
+<##inlay hints##~d~isabled:{rDisabled}>
+<#Show function argument names in the decompiled code as inlay hints#~s~how all:{rShowAll}>
+<#Hide the inlay hint if the argument name is equal to the function's argument name#~h~ide some:{rHideSome}>
+<#Hide the inlay hint if the argument name is contained in the function's argument name or vice versa#hide ~m~ore:{rHideAll}>{cGroup1}>
 example:{example}
 """,
             {
                 "FormChangeCb": F.FormChangeCb(self.OnFormChange),
-                "cGroup1": F.ChkGroupControl(["rEnabled", "rNoDuplicates"]),
-                "example": F.StringLabel(max(self.examples, key=len)),
+                "cGroup1": F.RadGroupControl(
+                    ["rDisabled", "rShowAll", "rHideSome", "rHideAll"], state.value
+                ),
+                "example": F.StringLabel(max(plugin_state_examples.values(), key=len)),
             },
         )
-        self.config = config
+        self.state = state
         self.changed = False
+
+    def read_state(self):
+        return plugin_state(self.GetControlValue(self.cGroup1))
 
     def OnFormChange(self, fid):
         match fid:
-            case idaapi.CB_INIT:
-                self.SetControlValue(self.rEnabled, self.config.enabled)
-                self.SetControlValue(self.rNoDuplicates, self.config.hide_redundant)
-                self.refresh()
-            case self.rEnabled.id | self.rNoDuplicates.id:
-                self.refresh()
+            case self.cGroup1.id:
+                state = self.read_state()
+                self.SetControlValue(self.example, plugin_state_examples[state])
+
             case idaapi.CB_YES:
-                enabled = self.GetControlValue(self.rEnabled)
-                hide_redundant = self.GetControlValue(self.rNoDuplicates)
-                self.changed = (self.config.enabled != enabled) or (
-                    self.config.hide_redundant != hide_redundant
-                )
-                self.config.enabled = enabled
-                self.config.hide_redundant = hide_redundant
+                state = self.read_state()
+                self.changed = self.state != state
+                self.state = state
         return 1
-
-    def refresh(self):
-        enabled = self.GetControlValue(self.rEnabled)
-        hide_redundant = self.GetControlValue(self.rNoDuplicates)
-        self.update_window(enabled, hide_redundant)
-
-    def update_window(self, enabled: bool, hide_redundant: bool):
-        self.EnableField(self.rNoDuplicates, enabled)
-        match enabled, hide_redundant:
-            case 0, _:
-                self.SetControlValue(self.example, self.examples[0])
-
-            case 1, 0:
-                self.SetControlValue(self.example, self.examples[1])
-
-            case 1, 1:
-                self.SetControlValue(self.example, self.examples[2])
 
     @staticmethod
     def test(execute=True):
         cfg = config_t()
         cfg.load()
-        f = config_form_t(cfg)
+        f = config_form_t(cfg.state)
         f, args = f.Compile()
         print(f"{args=}")
 
@@ -82,29 +75,30 @@ example:{example}
             print(args[1:])
             ok = 0
         if ok == 1:
-            print(f"OK {f.config.enabled=} {f.config.hide_redundant=} {f.changed=}")
+            print(f"OK {f.state=} {f.changed=}")
+            cfg.state = f.state
             cfg.save()
         f.Free()
 
 
 class config_t:
     def __init__(self):
-        self.enabled = True
-        self.hide_redundant = False
+        self.state = plugin_state.show_all
 
     def load(self):
-        self.enabled = idaapi.reg_read_bool("enabled", True, "HexInlay")
-        self.hide_redundant = idaapi.reg_read_bool("hide_redundant", False, "HexInlay")
+        self.state = plugin_state(
+            idaapi.reg_read_int("state", plugin_state.show_all.value, "HexInlay")
+        )
 
     def save(self):
-        idaapi.reg_write_bool("enabled", self.enabled, "HexInlay")
-        idaapi.reg_write_bool("hide_redundant", self.hide_redundant, "HexInlay")
+        idaapi.reg_write_int("state", self.state.value, "HexInlay")
 
     def ask_user(self):
-        form = config_form_t(self)
+        form = config_form_t(self.state)
         form, args = form.Compile()
         ok = form.Execute()
         if ok == 1 and form.changed:
+            self.state = form.state
             self.save()
             return True
         return False
@@ -165,13 +159,46 @@ def type_to_argnames(t: idaapi.tinfo_t) -> dict:
 class hexinlay_hooks_t(idaapi.Hexrays_Hooks):
     def __init__(self, config: config_t = None):
         self.config = config
-        super(hexinlay_hooks_t, self).__init__()
+        super().__init__()
+
+    def is_the_same_argument(self, argument_name: str, arg: idaapi.carg_t) -> bool:
+        match self.config.state:
+            case plugin_state.disabled:
+                return False
+            case plugin_state.show_all:
+                return False
+            case plugin_state.hide_some:
+                if arg.op not in [idaapi.cot_obj, idaapi.cot_var]:
+                    return False
+        function_argument_name = arg.dstr()
+
+        if argument_name == function_argument_name:
+            return True
+
+        if self.config.state == plugin_state.hide_some:
+            return False
+
+        assert self.config.state == plugin_state.hide_more
+        # based on https://github.com/JetBrains/intellij-community/blob/6ddf70b998a05ce01b3d58f04553548ba5ff767f/java/java-impl/src/com/intellij/codeInsight/hints/JavaHintUtils.kt#L325
+
+        if len(argument_name) < 3:
+            return False
+
+        if len(function_argument_name) < 3:
+            return False
+
+        if argument_name in function_argument_name:
+            return True
+
+        if function_argument_name in argument_name:
+            return True
+        return False
 
     def func_printed(self, cfunc: "idaapi.cfunc_t") -> "int":
         # print(f"Function {cfunc.entry_ea:x} printed")
 
         # should never happen as we are hooked only when the hints are enabled
-        if not self.config.enabled:
+        if self.config.state == plugin_state.disabled:
             return 0
 
         call_item: idaapi.citem_t
@@ -184,7 +211,7 @@ class hexinlay_hooks_t(idaapi.Hexrays_Hooks):
             if call_item.op == idaapi.cot_call:
                 call_expr: idaapi.cexpr_t = call_item.cexpr
                 # 1. collect argument names from the function type
-                # print(f"Function {t.dstr()}")
+                # print(f"Function {call_expr.type.dstr()}")
                 t: idaapi.tinfo_t = call_expr.x.type
                 argnames = type_to_argnames(t)
                 if not argnames:
@@ -201,14 +228,10 @@ class hexinlay_hooks_t(idaapi.Hexrays_Hooks):
                     if not argname:
                         continue
 
-                    if self.config.hide_redundant:
-                        # if the argument name is the same as the function argument name, skip it
-                        if (
-                            arg.op in [idaapi.cot_obj, idaapi.cot_var]
-                            and argname == arg.dstr()
-                        ):
-                            # print(f"Skipping {arg_idx} {argname} {arg.dstr()} {idaapi.get_ctype_name(arg.op)=} ")
-                            continue
+                    # if the argument name is the same as the function argument name, skip it
+                    if self.is_the_same_argument(argname, arg):
+                        # print( f"Skipping {arg_idx} {argname} {arg.dstr()} {idaapi.get_ctype_name(arg.op)=} " )
+                        continue
 
                     # skip to the leftmost object
                     # otherwise we get strings like " x a1: + y" instead of "a1: x + y"
@@ -267,7 +290,7 @@ class HexInlayPlugin_t(idaapi.plugin_t):
         self.config.load()
 
         self.hook = hexinlay_hooks_t(self.config)
-        self.enable(self.config.enabled)
+        self.enable(self.config.state)
 
         addon = idaapi.addon_info_t()
         addon.id = "milan.bohacek.hexinlay"
@@ -279,8 +302,8 @@ class HexInlayPlugin_t(idaapi.plugin_t):
 
         return idaapi.PLUGIN_KEEP
 
-    def enable(self, enable: bool):
-        match enable, self.hooked:
+    def enable(self, state: plugin_state):
+        match state > plugin_state.disabled, self.hooked:
             case True, False:
                 self.hook.hook()
                 self.hooked = True
@@ -295,7 +318,7 @@ class HexInlayPlugin_t(idaapi.plugin_t):
     def run(self, arg=0):
         if not self.config.ask_user():
             return
-        self.enable(self.config.enabled)
+        self.enable(self.config.state)
         self.refresh_pseudocode_widgets()
 
     def refresh_pseudocode_widgets(self):
