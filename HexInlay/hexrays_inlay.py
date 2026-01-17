@@ -304,7 +304,7 @@ class HexInlayPlugin_t(idaapi.plugin_t):
         addon.name = "HexInlay"
         addon.producer = "Milankovo"
         addon.url = "https://github.com/milankovo/hexinlay"
-        addon.version = "1.0.1"
+        addon.version = "1.2.0"
         idaapi.register_addon(addon)
 
         return idaapi.PLUGIN_KEEP
