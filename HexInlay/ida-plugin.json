@@ -1,7 +1,21 @@
 {
     "IDAMetadataDescriptorVersion": 1,
     "plugin": {
-        "name": "HexInlay",
-        "entryPoint": "hexrays_inlay.py"
+        "name": "hexinlay",
+        "version": "1.0.1",
+        "entryPoint": "hexrays_inlay.py",
+        "description": "Display function argument names in Hex-Rays decompiled code as inlay hints",
+        "license": "MIT",
+        "urls": {
+            "repository": "https://github.com/milankovo/hexinlay"
+        },
+        "authors": [
+            {"name": "Milankovo", "email": "hexinlay@noreply.github.com"}
+        ],
+        "idaVersions": ">=9.0",
+        "platforms": ["windows-x86_64", "linux-x86_64", "macos-x86_64", "macos-aarch64"],
+        "categories": ["ui-ux-and-visualization", "decompilation"],
+        "keywords": ["decompiler", "inlay-hints", "hex-rays"],
+        "logoPath": "logo.jpeg"
     }
 }

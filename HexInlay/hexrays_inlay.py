@@ -1,6 +1,10 @@
 import re
+import logging
 import idaapi
 import enum
+
+logger = logging.getLogger("hexinlay")
+logger.setLevel(logging.INFO)
 
 
 class plugin_state(enum.IntEnum):
@@ -16,6 +20,7 @@ plugin_state_examples = {
     plugin_state.hide_some: "memmove(dst: this->dst, src, len: 10)",
     plugin_state.hide_more: "memmove(this->dst, src, len: 10)",
 }
+
 
 class config_form_t(idaapi.Form):
     def __init__(self, state: plugin_state):
@@ -140,7 +145,7 @@ def modifytext(cfunc: idaapi.cfunc_t, index_to_name_map: dict):
         l.line = rg.sub(callback, l.line)
 
 
-def type_to_argnames(t: idaapi.tinfo_t) -> dict:
+def type_to_argnames(t: idaapi.tinfo_t) -> dict | None:
     t.remove_ptr_or_array()
     funcdata = idaapi.func_type_data_t()
     got_data = t.get_func_details(funcdata)
@@ -157,7 +162,7 @@ def type_to_argnames(t: idaapi.tinfo_t) -> dict:
 
 
 class hexinlay_hooks_t(idaapi.Hexrays_Hooks):
-    def __init__(self, config: config_t = None):
+    def __init__(self, config: config_t | None = None):
         self.config = config
         super().__init__()
 
@@ -215,7 +220,7 @@ class hexinlay_hooks_t(idaapi.Hexrays_Hooks):
                 t: idaapi.tinfo_t = call_expr.x.type
                 argnames = type_to_argnames(t)
                 if not argnames:
-                    print(
+                    logger.debug(
                         f"Failed to get function details for {t.dstr()} at {call_expr.ea:x}"
                     )
                     continue
@@ -264,14 +269,14 @@ class hexinlay_hooks_t(idaapi.Hexrays_Hooks):
 if __name__ == "__main__":
     idaapi.msg_clear()
     if "hex_cb_info" in globals():
-        print(f"Unhooking {hex_cb_info}")
+        logger.debug(f"Unhooking {hex_cb_info}")
         hex_cb_info.unhook()
 
     hex_cb_info = hexinlay_hooks_t()
     hex_cb_info.hook()
     config_form_t.test()
 
-    print("Hooked")
+    logger.debug("Hooked")
 
 
 class HexInlayPlugin_t(idaapi.plugin_t):
@@ -293,11 +298,11 @@ class HexInlayPlugin_t(idaapi.plugin_t):
         self.enable(self.config.state)
 
         addon = idaapi.addon_info_t()
-        addon.id = "milan.bohacek.hexinlay"
+        addon.id = "milankovo.hexinlay"
         addon.name = "HexInlay"
-        addon.producer = "Milan Bohacek"
+        addon.producer = "Milankovo"
         addon.url = "https://github.com/milankovo/hexinlay"
-        addon.version = "9.0"
+        addon.version = "1.0.1"
         idaapi.register_addon(addon)
 
         return idaapi.PLUGIN_KEEP
