@@ -224,6 +224,8 @@ class hexinlay_hooks_t(idaapi.Hexrays_Hooks):
                         f"Failed to get function details for {t.dstr()} at {call_expr.ea:x}"
                     )
                     continue
+                elif len(argnames) == 0:
+                    continue
                 # 2. collect argument objects from the call expression
                 arglist: idaapi.carglist_t = call_expr.a
                 arg: idaapi.carg_t
