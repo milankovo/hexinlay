@@ -2,7 +2,7 @@
     "IDAMetadataDescriptorVersion": 1,
     "plugin": {
         "name": "hexinlay",
-        "version": "1.0.1",
+        "version": "1.2.0",
         "entryPoint": "hexrays_inlay.py",
         "description": "Display function argument names in Hex-Rays decompiled code as inlay hints",
         "license": "MIT",
