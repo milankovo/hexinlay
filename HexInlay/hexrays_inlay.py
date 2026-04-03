@@ -44,7 +44,7 @@ example:{example}
                 "cGroup1": F.RadGroupControl(
                     ["rDisabled", "rShowAll", "rHideSome", "rHideAll"], state.value
                 ),
-                "example": F.StringLabel(max(plugin_state_examples.values(), key=len)),
+                "example": F.StringLabel(plugin_state_examples[state]),
             },
         )
         self.state = state
@@ -166,6 +166,17 @@ class hexinlay_hooks_t(idaapi.Hexrays_Hooks):
         self.config = config
         super().__init__()
 
+    def unwrap_same_argument_candidate(self, arg: idaapi.carg_t) -> idaapi.carg_t:
+        while True:
+            call_target = arg.x
+            if arg.op in [idaapi.cot_ref, idaapi.cot_cast]:
+                if call_target is None:
+                    return arg
+                arg = call_target
+                continue
+
+            return arg
+
     def is_the_same_argument(self, argument_name: str, arg: idaapi.carg_t) -> bool:
         match self.config.state:
             case plugin_state.disabled:
@@ -173,6 +184,7 @@ class hexinlay_hooks_t(idaapi.Hexrays_Hooks):
             case plugin_state.show_all:
                 return False
             case plugin_state.hide_some:
+                arg = self.unwrap_same_argument_candidate(arg)
                 if arg.op not in [idaapi.cot_obj, idaapi.cot_var]:
                     return False
         function_argument_name = arg.dstr()
@@ -304,7 +316,7 @@ class HexInlayPlugin_t(idaapi.plugin_t):
         addon.name = "HexInlay"
         addon.producer = "Milankovo"
         addon.url = "https://github.com/milankovo/hexinlay"
-        addon.version = "1.2.0"
+        addon.version = "1.2.1"
         idaapi.register_addon(addon)
 
         return idaapi.PLUGIN_KEEP
